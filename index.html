@@ -53,6 +53,7 @@
 <div id="loginPage" class="modal active">
   <div class="modal-content">
     <h3 style="text-align:center; margin-top:0;">Login Kasir</h3>
+    <div id="error-box" style="display:none;"></div>
     <input id="email" type="email" placeholder="Email">
     <input id="password" type="password" placeholder="Password">
     <button onclick="login()">Masuk</button>
@@ -190,6 +191,17 @@ let produk = [];
 let keranjang = [];
 let html5QrCode;
 
+function showError(msg, ok=false) {
+  const el = document.getElementById('error-box');
+  el.style.display = 'block';
+  el.style.padding = '10px';
+  el.style.margin = '10px 0';
+  el.style.borderRadius = '8px';
+  el.style.background = ok ? '#10b981' : '#ef4444';
+  el.style.color = '#fff';
+  el.innerText = msg;
+}
+
 // INIT
 checkUser();
 loadSetting();
@@ -202,7 +214,11 @@ supabase.channel('db-changes')
 
 // AUTH
 async function checkUser() {
-  const { data: { user: u } = await supabase.auth.getUser();
+  const { data: { user: u }, error } = await supabase.auth.getUser();
+  if (error) {
+    console.log(error);
+    return;
+  }
   if (u) {
     user = u;
     document.getElementById('loginPage').classList.remove('active');
@@ -214,20 +230,24 @@ async function checkUser() {
 }
 
 async function register() {
-  const { error } = await supabase.auth.signUp({
-    email: document.getElementById('email').value,
-    password: document.getElementById('password').value
-  });
-  alert(error ? error.message : 'Berhasil daftar! Silakan login.');
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  if (!email || !password) return showError('Email dan password wajib diisi');
+  const { error } = await supabase.auth.signUp({ email, password });
+  showError(error ? 'Daftar GAGAL: ' + error.message : 'Daftar BERHASIL! Silakan login.', !error);
 }
 
 async function login() {
-  const { error } = await supabase.auth.signInWithPassword({
-    email: document.getElementById('email').value,
-    password: document.getElementById('password').value
-  });
-  if (error) alert(error.message);
-  else checkUser();
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  if (!email || !password) return showError('Email dan password wajib diisi');
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) {
+    showError('Login GAGAL: ' + error.message);
+  } else {
+    showError('Login BERHASIL!', true);
+    setTimeout(checkUser, 500);
+  }
 }
 
 async function logout() {
@@ -270,6 +290,7 @@ function closeModal(id) {
 
 // PRODUK
 async function loadProducts() {
+  if (!user) return;
   const search = document.getElementById('searchProduk').value;
   let query = supabase.from('products').select('*').eq('user_id', user.id);
   if (search) query = query.ilike('name', `%${search}%`);
@@ -345,6 +366,7 @@ async function hapusProduk(id) {
 // KERANJANG
 function addToCart(id) {
   const p = produk.find(x => x.id === id);
+  if (!p) return;
   if (p.stock <= 0) return alert('Stok habis');
   const idx = keranjang.findIndex(x => x.id === id);
   if (idx >= 0) keranjang[idx].qty++;
@@ -446,6 +468,7 @@ function showStruk(trx) {
 
 // LAPORAN
 async function loadTransactions() {
+  if (!user) return;
   const date = document.getElementById('filterTanggal').value;
   let query = supabase.from('transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
   if (date) query = query.gte('created_at', date).lt('created_at', date + 'T23:59:59');
@@ -480,6 +503,7 @@ function renderStokMenipis() {
 
 // HUTANG
 async function loadHutang() {
+  if (!user) return;
   const { data } = await supabase.from('transactions')
     .select('*')
     .eq('user_id', user.id)
