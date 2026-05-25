@@ -181,8 +181,8 @@
 </div>
 
 <script>
-const SUPABASE_URL = 'GANTI_DENGAN_URL_SUPABASE_LU';
-const SUPABASE_KEY = 'GANTI_DENGAN_ANON_KEY_SUPABASE_LU';
+const SUPABASE_URL = 'https://azeziutsmlrfeigzhojs.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_NOi5w8EKtgu4YjtiKYquAQ_LOIXJLB6';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let user = null;
@@ -218,7 +218,7 @@ async function register() {
     email: document.getElementById('email').value,
     password: document.getElementById('password').value
   });
-  alert(error ? error.message : 'Cek email untuk verifikasi!');
+  alert(error ? error.message : 'Berhasil daftar! Silakan login.');
 }
 
 async function login() {
@@ -539,4 +539,4 @@ function loadSetting() {
 }
 </script>
 </body>
-  </html>
+      </html>
