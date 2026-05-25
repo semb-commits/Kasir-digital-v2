@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kasir Realtime</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2563eb">
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #f8fafc; --card: #fff; --text: #0f172a; --muted: #64748b;
+    --accent: #2563eb; --danger: #ef4444; --success: #10b981; --border: #e2e8f0;
+  }
+  [data-theme="dark"] {
+    --bg: #0f172a; --card: #1e293b; --text: #e2e8f0; --muted: #94a3b8;
+    --accent: #38bdf8; --danger: #f87171; --success: #34d399; --border: #334155;
+  }
+    * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui; background: var(--bg); color: var(--text); }
+  header { padding: 12px 16px; background: var(--card); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; }
+  .tabs { display: flex; gap: 8px; padding: 8px 16px; overflow-x: auto; }
+  .tab { padding: 8px 16px; border-radius: 8px; cursor: pointer; background: var(--card); border: 1px solid var(--border); white-space: nowrap; }
+  .tab.active { background: var(--accent); color: #fff; }
+  .page { display: none; padding: 12px; max-width: 1000px; margin: 0 auto; }
+  .page.active { display: block; }
+  .grid { display: grid; gap: 12px; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .card { background: var(--card); padding: 14px; border-radius: 12px; border: 1px solid var(--border); }
+  input, button, select, textarea { width: 100%; padding: 12px; margin: 6px 0; border-radius: 8px; border: 1px solid var(--border); font-size: 16px; background: var(--bg); color: var(--text); }
+  button { background: var(--accent); color: #fff; font-weight: 600; border: none; cursor: pointer; }
+  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  button.danger { background: var(--danger); }
+  button.success { background: var(--success); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 10px; border-bottom: 1px solid var(--border); text-align: left; }
+  .badge { padding: 2px 8px; border-radius: 12px; font-size: 12px; background: #f59e0b; color: #000; }
+  #reader { width: 100%; border-radius: 8px; overflow: hidden; }
+  .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+  .modal.active { display: flex; }
+  .modal-content { background: var(--card); padding: 20px; border-radius: 12px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto; }
+  .struk { background: #fff; color: #000; padding: 20px; font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.6; }
+  .struk .center { text-align: center; }
+  .struk .row { display: flex; justify-content: space-between; margin: 4px 0; }
+  .struk .line { border-top: 1px dashed #000; margin: 8px 0; }
+  @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginPage" class="modal active">
+  <div class="modal-content">
+    <h3 style="text-align:center; margin-top:0;">Login Kasir</h3>
+    <input id="email" type="email" placeholder="Email">
+    <input id="password" type="password" placeholder="Password">
+    <button onclick="login()">Masuk</button>
+    <button class="ghost" onclick="register()">Daftar Akun Baru</button>
+    <p style="text-align:center; font-size:12px; color:var(--muted);">Gratis. Data tersimpan di cloud.</p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none;">
+  <header>
+    <h3 style="margin:0;">Kasir Realtime</h3>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button class="ghost" onclick="toggleTheme()" style="width:auto; padding:8px;">🌓</button>
+      <button class="ghost" onclick="logout()" style="width:auto; padding:8px 12px;">Logout</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('kasir')">Kasir</div>
+    <div class="tab" onclick="switchTab('produk')">Produk</div>
+    <div class="tab" onclick="switchTab('laporan')">Laporan</div>
+    <div class="tab" onclick="switchTab('hutang')">Hutang</div>
+    <div class="tab" onclick="switchTab('setting')">Setting</div>
+  </div>
+
+  <!-- KASIR -->
+  <div id="kasir" class="page active">
+    <div class="grid grid-2">
+      <div class="card">
+        <h4 style="margin-top:0;">Scan & Produk</h4>
+        <button onclick="startScan()">📷 Scan Barcode</button>
+        <button class="ghost" onclick="stopScan()" id="btnStopScan" style="display:none;">Stop Scan</button>
+        <div id="reader" style="display:none;"></div>
+        <input id="searchProduk" placeholder="Cari produk..." oninput="loadProducts()">
+        <div id="listProduk" style="margin-top:12px; max-height:300px; overflow-y:auto;"></div>
+      </div>
+
+      <div class="card">
+        <h4 style="margin-top:0;">Keranjang</h4>
+        <table id="keranjang"><tbody></tbody></table>
+        <div id="emptyCart" style="text-align:center; color:var(--muted); padding:20px;">Keranjang kosong</div>
+        <div style="text-align:right; font-size:20px; font-weight:bold;">Total: Rp <span id="total">0</span></div>
+        <select id="metodeBayar">
+          <option value="cash">Cash</option>
+          <option value="qris">QRIS</option>
+          <option value="hutang">Hutang</option>
+        </select>
+        <div id="hutangField" style="display:none;">
+          <input id="namaPelanggan" placeholder="Nama Pelanggan">
+          <input id="teleponPelanggan" placeholder="No HP">
+        </div>
+        <input id="bayar" type="number" placeholder="Uang Bayar">
+        <button class="success" onclick="checkout()">Proses Transaksi</button>
+        <button class="danger" onclick="resetKeranjang()">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRODUK -->
+  <div id="produk" class="page">
+    <div class="card">
+      <h4 style="margin-top:0;">Manajemen Produk</h4>
+      <button onclick="showModal('modalProduk')">+ Tambah Produk</button>
+      <table id="tabelProduk"><thead><tr><th>Nama</th><th>Harga</th><th>Stok</th><th>Aksi</th></tr></thead><tbody></tbody></table>
+    </div>
+    
+    <div class="card" style="margin-top:12px;">
+      <h4 style="margin-top:0;">Stok Menipis</h4>
+      <div id="stokMenipis"></div>
+    </div>
+  </div>
+
+  <!-- LAPORAN -->
+  <div id="laporan" class="page">
+    <div class="card">
+      <h4 style="margin-top:0;">Laporan Penjualan Realtime</h4>
+      <input id="filterTanggal" type="date">
+      <button onclick="loadTransactions()">Filter</button>
+      <div id="ringkasan" style="margin:12px 0; font-weight:600;"></div>
+      <table id="tabelLaporan"><thead><tr><th>Waktu</th><th>Produk</th><th>Total</th><th>Metode</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <!-- HUTANG -->
+  <div id="hutang" class="page">
+    <div class="card">
+      <h4 style="margin-top:0;">Hutang Piutang</h4>
+      <table id="tabelHutang"><thead><tr><th>Pelanggan</th><th>Total</th><th>Status</th><th>Aksi</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <!-- SETTING -->
+  <div id="setting" class="page">
+    <div class="card">
+      <h4 style="margin-top:0;">Setting Toko</h4>
+      <input id="namaToko" placeholder="Nama Toko">
+      <input id="alamatToko" placeholder="Alamat">
+      <button onclick="simpanSetting()">Simpan</button>
+    </div>
+  </div>
+
+  <!-- MODAL TAMBAH/EDIT PRODUK -->
+  <div id="modalProduk" class="modal">
+    <div class="modal-content">
+      <h4>Tambah/Edit Produk</h4>
+      <input id="pId" type="hidden">
+      <input id="pBarcode" placeholder="Barcode">
+      <input id="pNama" placeholder="Nama Produk">
+      <input id="pHarga" type="number" placeholder="Harga Jual">
+      <input id="pModal" type="number" placeholder="Harga Modal">
+      <input id="pStok" type="number" placeholder="Stok">
+      <button onclick="simpanProduk()">Simpan</button>
+      <button class="ghost" onclick="closeModal('modalProduk')">Batal</button>
+    </div>
+  </div>
+
+  <!-- MODAL STRUK -->
+  <div id="modalStruk" class="modal">
+    <div class="modal-content" style="max-width:400px;">
+      <div id="strukContent"></div>
+      <button class="success" onclick="window.print()">🖨️ Cetak Struk</button>
+      <button class="ghost" onclick="closeModal('modalStruk')">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'GANTI_DENGAN_URL_SUPABASE_LU';
+const SUPABASE_KEY = 'GANTI_DENGAN_ANON_KEY_SUPABASE_LU';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let user = null;
+let produk = [];
+let keranjang = [];
+let html5QrCode;
+
+// INIT
+checkUser();
+loadSetting();
+supabase.channel('db-changes')
+  .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+    loadProducts();
+    loadTransactions();
+  })
+  .subscribe();
+
+// AUTH
+async function checkUser() {
+  const { data: { user: u } = await supabase.auth.getUser();
+  if (u) {
+    user = u;
+    document.getElementById('loginPage').classList.remove('active');
+    document.getElementById('app').style.display = 'block';
+    loadProducts();
+    loadTransactions();
+    loadHutang();
+  }
+}
+
+async function register() {
+  const { error } = await supabase.auth.signUp({
+    email: document.getElementById('email').value,
+    password: document.getElementById('password').value
+  });
+  alert(error ? error.message : 'Cek email untuk verifikasi!');
+}
+
+async function login() {
+  const { error } = await supabase.auth.signInWithPassword({
+    email: document.getElementById('email').value,
+    password: document.getElementById('password').value
+  });
+  if (error) alert(error.message);
+  else checkUser();
+}
+
+async function logout() {
+  await supabase.auth.signOut();
+  location.reload();
+}
+
+// TAB & THEME
+function switchTab(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+  if (id === 'produk') loadProducts();
+  if (id === 'hutang') loadHutang();
+}
+
+function toggleTheme() {
+  const theme = document.body.getAttribute('data-theme') === 'dark'? 'light' : 'dark';
+  document.body.setAttribute('data-theme', theme);
+  localStorage.setItem('theme', theme);
+}
+document.body.setAttribute('data-theme', localStorage.getItem('theme') || 'dark');
+
+// MODAL
+function showModal(id) {
+  document.getElementById(id).classList.add('active');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('active');
+  if (id === 'modalProduk') {
+    document.getElementById('pId').value = '';
+    document.getElementById('pBarcode').value = '';
+    document.getElementById('pNama').value = '';
+    document.getElementById('pHarga').value = '';
+    document.getElementById('pModal').value = '';
+    document.getElementById('pStok').value = '';
+  }
+}
+
+// PRODUK
+async function loadProducts() {
+  const search = document.getElementById('searchProduk').value;
+  let query = supabase.from('products').select('*').eq('user_id', user.id);
+  if (search) query = query.ilike('name', `%${search}%`);
+  const { data } = await query.order('created_at', { ascending: false });
+  produk = data || [];
+  renderProduk();
+  renderStokMenipis();
+}
+
+function renderProduk() {
+  const tbody = document.querySelector('#tabelProduk tbody');
+  const list = document.getElementById('listProduk');
+  tbody.innerHTML = '';
+  list.innerHTML = '';
+  
+  produk.forEach(p => {
+    tbody.innerHTML += `<tr>
+      <td>${p.name}</td>
+      <td>Rp ${p.price.toLocaleString('id-ID')}</td>
+      <td>${p.stock} ${p.stock <= 5? '<span class="badge">Menipis</span>' : ''}</td>
+      <td>
+        <button class="ghost" style="padding:5px;" onclick="editProduk('${p.id}')">Edit</button>
+        <button class="danger" style="padding:5px;" onclick="hapusProduk('${p.id}')">Hapus</button>
+      </td>
+    </tr>`;
+    
+    list.innerHTML += `<div style="padding:10px; border:1px solid var(--border); border-radius:8px; margin-bottom:8px; cursor:pointer;" onclick="addToCart('${p.id}')">
+      <b>${p.name}</b><br>
+      <small>Rp ${p.price.toLocaleString('id-ID')} | Stok: ${p.stock}</small>
+    </div>`;
+  });
+}
+
+function editProduk(id) {
+  const p = produk.find(x => x.id === id);
+  document.getElementById('pId').value = p.id;
+  document.getElementById('pBarcode').value = p.barcode;
+  document.getElementById('pNama').value = p.name;
+  document.getElementById('pHarga').value = p.price;
+  document.getElementById('pModal').value = p.modal;
+  document.getElementById('pStok').value = p.stock;
+  showModal('modalProduk');
+}
+
+async function simpanProduk() {
+  const data = {
+    id: document.getElementById('pId').value || undefined,
+    barcode: document.getElementById('pBarcode').value,
+    name: document.getElementById('pNama').value,
+    price: parseInt(document.getElementById('pHarga').value) || 0,
+    modal: parseInt(document.getElementById('pModal').value) || 0,
+    stock: parseInt(document.getElementById('pStok').value) || 0,
+    user_id: user.id
+  };
+  if (!data.name) return alert('Nama wajib diisi');
+  
+  const { error } = data.id 
+    ? await supabase.from('products').update(data).eq('id', data.id)
+    : await supabase.from('products').insert([data]);
+  
+  if (error) alert(error.message);
+  else {
+    alert('Tersimpan');
+    closeModal('modalProduk');
+  }
+}
+
+async function hapusProduk(id) {
+  if (!confirm('Hapus produk ini?')) return;
+  await supabase.from('products').delete().eq('id', id);
+}
+
+// KERANJANG
+function addToCart(id) {
+  const p = produk.find(x => x.id === id);
+  if (p.stock <= 0) return alert('Stok habis');
+  const idx = keranjang.findIndex(x => x.id === id);
+  if (idx >= 0) keranjang[idx].qty++;
+  else keranjang.push({...p, qty: 1});
+  renderCart();
+}
+
+function renderCart() {
+  const tbody = document.querySelector('#keranjang tbody');
+  tbody.innerHTML = '';
+  let total = 0;
+  document.getElementById('emptyCart').style.display = keranjang.length === 0? 'block' : 'none';
+  
+  keranjang.forEach((item, i) => {
+    const sub = item.price * item.qty;
+    total += sub;
+    tbody.innerHTML += `<tr>
+      <td>${item.name}</td>
+      <td>
+        <button onclick="ubahQty(${i}, -1)">-</button>
+        ${item.qty}
+        <button onclick="ubahQty(${i}, 1)">+</button>
+      </td>
+      <td>Rp ${sub.toLocaleString('id-ID')}</td>
+      <td><button class="danger" onclick="removeCart(${i})">x</button></td>
+    </tr>`;
+  });
+  document.getElementById('total').textContent = total.toLocaleString('id-ID');
+}
+
+function ubahQty(i, delta) {
+  keranjang[i].qty += delta;
+  if (keranjang[i].qty <= 0) keranjang.splice(i, 1);
+  renderCart();
+}
+
+function removeCart(i) {
+  keranjang.splice(i, 1);
+  renderCart();
+}
+
+function resetKeranjang() {
+  keranjang = [];
+  renderCart();
+  document.getElementById('bayar').value = '';
+}
+
+document.getElementById('metodeBayar').onchange = function() {
+  document.getElementById('hutangField').style.display = this.value === 'hutang'? 'block' : 'none';
+};
+
+// CHECKOUT
+async function checkout() {
+  if (keranjang.length === 0) return alert('Keranjang kosong');
+  const total = keranjang.reduce((a, b) => a + b.price * b.qty, 0);
+  const metode = document.getElementById('metodeBayar').value;
+  const bayar = parseInt(document.getElementById('bayar').value) || total;
+  
+  if (metode !== 'hutang' && bayar < total) return alert('Uang kurang');
+
+  const { data, error } = await supabase.from('transactions').insert([{
+    items: keranjang,
+    total: total,
+    metode: metode,
+    pelanggan: metode === 'hutang'? document.getElementById('namaPelanggan').value : null,
+    telepon: metode === 'hutang'? document.getElementById('teleponPelanggan').value : null,
+    status: metode === 'hutang'? 'belum_bayar' : 'lunas',
+    user_id: user.id
+  }]).select();
+
+  if (error) return alert(error.message);
+
+  for (let item of keranjang) {
+    await supabase.from('products').update({ stock: item.stock - item.qty }).eq('id', item.id);
+  }
+
+  showStruk(data[0]);
+  resetKeranjang();
+}
+
+// STRUK
+function showStruk(trx) {
+  const setting = JSON.parse(localStorage.getItem('setting') || '{}');
+  document.getElementById('strukContent').innerHTML = `
+    <div class="struk">
+      <div class="center"><b>${setting.nama || 'TOKO'}</b></div>
+      <div class="center">${setting.alamat || ''}</div>
+      <div class="center">${new Date().toLocaleString('id-ID')}</div>
+      <div class="line"></div>
+      ${trx.items.map(i => `<div>${i.name} x${i.qty}</div><div class="row"><span></span><span>Rp ${(i.price*i.qty).toLocaleString('id-ID')}</span></div>`).join('')}
+      <div class="line"></div>
+      <div class="row"><b>Total</b><b>Rp ${trx.total.toLocaleString('id-ID')}</b></div>
+      <div class="row"><span>Bayar (${trx.metode})</span><span>Rp ${trx.total.toLocaleString('id-ID')}</span></div>
+      <div class="line"></div>
+      <div class="center">Terima Kasih</div>
+    </div>`;
+  showModal('modalStruk');
+}
+
+// LAPORAN
+async function loadTransactions() {
+  const date = document.getElementById('filterTanggal').value;
+  let query = supabase.from('transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+  if (date) query = query.gte('created_at', date).lt('created_at', date + 'T23:59:59');
+  const { data } = await query;
+  
+  const tbody = document.querySelector('#tabelLaporan tbody');
+  tbody.innerHTML = '';
+  let totalOmzet = 0;
+  
+  data?.forEach(t => {
+    totalOmzet += t.total;
+    const items = t.items.map(i => `${i.name}(${i.qty})`).join(', ');
+    tbody.innerHTML += `<tr>
+      <td>${new Date(t.created_at).toLocaleString('id-ID')}</td>
+      <td>${items}</td>
+      <td>Rp ${t.total.toLocaleString('id-ID')}</td>
+      <td>${t.metode}</td>
+    </tr>`;
+  });
+  document.getElementById('ringkasan').textContent = `Total Transaksi: ${data?.length || 0} | Omzet: Rp ${totalOmzet.toLocaleString('id-ID')}`;
+}
+
+// STOK MENIPIS
+function renderStokMenipis() {
+  const menipis = produk.filter(p => p.stock <= 5 && p.stock > 0);
+  document.getElementById('stokMenipis').innerHTML = menipis.length === 0 
+    ? '<p style="text-align:center; color:var(--muted);">Stok aman</p>'
+    : menipis.map(p => `<div style="padding:10px; border:1px solid var(--border); border-radius:8px; margin-bottom:8px;">
+      ${p.name} - Sisa ${p.stock} <span class="badge">Restock!</span>
+    </div>`).join('');
+}
+
+// HUTANG
+async function loadHutang() {
+  const { data } = await supabase.from('transactions')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('metode', 'hutang')
+    .eq('status', 'belum_bayar');
+  
+  document.querySelector('#tabelHutang tbody').innerHTML = data?.map(t => `
+    <tr>
+      <td>${t.pelanggan}<br><small>${t.telepon}</small></td>
+      <td>Rp ${t.total.toLocaleString('id-ID')}</td>
+      <td><span class="badge">Belum Bayar</span></td>
+      <td><button class="success" style="padding:5px;" onclick="bayarHutang('${t.id}')">Bayar</button></td>
+    </tr>
+  `).join('') || '<tr><td colspan="4" style="text-align:center;">Tidak ada hutang</td></tr>';
+}
+
+async function bayarHutang(id) {
+  await supabase.from('transactions').update({ status: 'lunas' }).eq('id', id);
+  alert('Hutang lunas');
+}
+
+// SCAN BARCODE
+async function startScan() {
+  document.getElementById('reader').style.display = 'block';
+  document.getElementById('btnStopScan').style.display = 'block';
+  html5QrCode = new Html5Qrcode("reader");
+  await html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 },
+    async (decodedText) => {
+      const { data } = await supabase.from('products').select('*').eq('barcode', decodedText).eq('user_id', user.id).single();
+      if (data) addToCart(data.id);
+      stopScan();
+    }
+  );
+}
+
+async function stopScan() {
+  if (html5QrCode) {
+    await html5QrCode.stop();
+    document.getElementById('reader').style.display = 'none';
+    document.getElementById('btnStopScan').style.display = 'none';
+  }
+}
+
+// SETTING
+function simpanSetting() {
+  localStorage.setItem('setting', JSON.stringify({
+    nama: document.getElementById('namaToko').value,
+    alamat: document.getElementById('alamatToko').value
+  }));
+  alert('Tersimpan');
+}
+
+function loadSetting() {
+  const s = JSON.parse(localStorage.getItem('setting') || '{}');
+  document.getElementById('namaToko').value = s.nama || '';
+  document.getElementById('alamatToko').value = s.alamat || '';
+}
+</script>
+</body>
+  </html>
