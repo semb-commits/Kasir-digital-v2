@@ -72,11 +72,11 @@
   </header>
 
   <div class="tabs">
-    <div class="tab active" onclick="switchTab('kasir')">Kasir</div>
-    <div class="tab" onclick="switchTab('produk')">Produk</div>
-    <div class="tab" onclick="switchTab('laporan')">Laporan</div>
-    <div class="tab" onclick="switchTab('hutang')">Hutang</div>
-    <div class="tab" onclick="switchTab('setting')">Setting</div>
+    <div class="tab active" onclick="switchTab('kasir', event)">Kasir</div>
+    <div class="tab" onclick="switchTab('produk', event)">Produk</div>
+    <div class="tab" onclick="switchTab('laporan', event)">Laporan</div>
+    <div class="tab" onclick="switchTab('hutang', event)">Hutang</div>
+    <div class="tab" onclick="switchTab('setting', event)">Setting</div>
   </div>
 
   <!-- KASIR -->
@@ -236,7 +236,7 @@ async function logout() {
 }
 
 // TAB & THEME
-function switchTab(id) {
+function switchTab(id, event) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -246,7 +246,7 @@ function switchTab(id) {
 }
 
 function toggleTheme() {
-  const theme = document.body.getAttribute('data-theme') === 'dark'? 'light' : 'dark';
+  const theme = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
   document.body.setAttribute('data-theme', theme);
   localStorage.setItem('theme', theme);
 }
@@ -289,7 +289,7 @@ function renderProduk() {
     tbody.innerHTML += `<tr>
       <td>${p.name}</td>
       <td>Rp ${p.price.toLocaleString('id-ID')}</td>
-      <td>${p.stock} ${p.stock <= 5? '<span class="badge">Menipis</span>' : ''}</td>
+      <td>${p.stock} ${p.stock <= 5 ? '<span class="badge">Menipis</span>' : ''}</td>
       <td>
         <button class="ghost" style="padding:5px;" onclick="editProduk('${p.id}')">Edit</button>
         <button class="danger" style="padding:5px;" onclick="hapusProduk('${p.id}')">Hapus</button>
@@ -356,7 +356,7 @@ function renderCart() {
   const tbody = document.querySelector('#keranjang tbody');
   tbody.innerHTML = '';
   let total = 0;
-  document.getElementById('emptyCart').style.display = keranjang.length === 0? 'block' : 'none';
+  document.getElementById('emptyCart').style.display = keranjang.length === 0 ? 'block' : 'none';
   
   keranjang.forEach((item, i) => {
     const sub = item.price * item.qty;
@@ -393,7 +393,7 @@ function resetKeranjang() {
 }
 
 document.getElementById('metodeBayar').onchange = function() {
-  document.getElementById('hutangField').style.display = this.value === 'hutang'? 'block' : 'none';
+  document.getElementById('hutangField').style.display = this.value === 'hutang' ? 'block' : 'none';
 };
 
 // CHECKOUT
@@ -409,9 +409,9 @@ async function checkout() {
     items: keranjang,
     total: total,
     metode: metode,
-    pelanggan: metode === 'hutang'? document.getElementById('namaPelanggan').value : null,
-    telepon: metode === 'hutang'? document.getElementById('teleponPelanggan').value : null,
-    status: metode === 'hutang'? 'belum_bayar' : 'lunas',
+    pelanggan: metode === 'hutang' ? document.getElementById('namaPelanggan').value : null,
+    telepon: metode === 'hutang' ? document.getElementById('teleponPelanggan').value : null,
+    status: metode === 'hutang' ? 'belum_bayar' : 'lunas',
     user_id: user.id
   }]).select();
 
